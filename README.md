@@ -162,7 +162,6 @@ python civitai_scraper.py --base-model "Flux.1 D" --max-models 10
 
 ### Common Base Models
 
-Based on the image you provided, here are the common base model architectures:
 
 **Flux Models:**
 - `Flux.1 D`
