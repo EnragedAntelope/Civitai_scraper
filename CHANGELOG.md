@@ -1,0 +1,75 @@
+# Changelog
+
+## Version 2.1 - Fixed ZImageTurbo (2025-12-28)
+
+### Critical Fix
+
+**Fixed ZImageTurbo and all base model filtering:**
+- Changed API parameter from `baseModel` to `baseModels` (plural)
+- This was causing the API to ignore the filter and return mixed results
+- Now correctly returns 100% matching images for ANY base model
+
+### Test Results
+- ✅ ZImageTurbo: 200/200 images (100% match)
+- ✅ All base models now work correctly
+- ✅ Strict filtering working as expected
+
+## Version 2.0 - Fixed Image Scraping (2025-12-28)
+
+### Major Changes
+
+**Fixed the "no images scraped" issue:**
+- Switched from `/models/{id}` endpoint to `/images` endpoint
+- The images endpoint includes full metadata with prompts
+- Now successfully scrapes images with prompts and generation parameters
+
+### API Changes
+
+**Endpoint Migration:**
+- Old: Used `/api/v1/models` → `/api/v1/models/{id}` (no metadata)
+- New: Uses `/api/v1/images` directly (includes all metadata)
+
+**Parameter Changes:**
+- `--max-models` → `--max-images` (default: 100)
+- Sort options changed to: "Most Reactions", "Most Comments", "Newest"
+- Timeout increased from 30s to 60s for better reliability
+
+### Data Structure Changes
+
+**New fields captured:**
+- `image_id` - Unique image identifier
+- `image_url` - Direct URL to image
+- `base_model` - Base model architecture
+- `created_at` - Image creation timestamp
+- `username` - Creator username
+- `post_id` - Associated post ID
+- `model_version_ids` - List of model version IDs used
+
+**Metadata fields:**
+- `prompt` - Positive prompt
+- `negative_prompt` - Negative prompt
+- `seed`, `steps`, `sampler`, `cfg_scale`
+- `size`, `model_hash`, `hashes`, `resources`
+
+### Bug Fixes
+
+- Fixed NoneType error when metadata is missing
+- Added proper null/None handling for all fields
+- Improved error handling for API timeouts
+
+### Improvements
+
+- Better progress reporting (shows image count instead of model count)
+- More detailed logging in both CLI and GUI
+- Export prompts now includes base model and username
+- GUI shows real-time image count progress
+
+## Version 1.0 - Initial Release
+
+- Command-line scraper
+- Cross-platform GUI
+- Automated installation scripts
+- Virtual environment support
+- Base model filtering
+- Model type filtering
+
