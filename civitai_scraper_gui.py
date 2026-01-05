@@ -17,8 +17,10 @@ class CivitaiScraperGUI:
     """GUI for Civitai scraper."""
 
     # Common base models from the Civitai interface
-    # Based on actual API data scan (2025-12-28)
+    # Note: "Any" allows scraping without base model filter
+    # New models can be added here as Civitai introduces them
     BASE_MODELS = [
+        "Any",  # No filter - get all base models
         "Flux.1 D",
         "Flux.1 S",
         "Flux.2 D",
@@ -83,11 +85,28 @@ class CivitaiScraperGUI:
         "Newest"
     ]
 
+    PERIOD_OPTIONS = [
+        "AllTime",
+        "Year",
+        "Month",
+        "Week",
+        "Day"
+    ]
+
+    NSFW_OPTIONS = [
+        "Any",       # No filter
+        "None",      # SFW only
+        "Soft",      # Include soft NSFW
+        "Mature",    # Include mature
+        "X"          # Include all NSFW
+    ]
+
     def __init__(self, root):
         """Initialize the GUI."""
         self.root = root
         self.root.title("Civitai Image Prompt Scraper")
-        self.root.geometry("800x700")
+        self.root.geometry("700x700")
+        self.root.minsize(600, 500)
 
         # Make window resizable
         self.root.columnconfigure(0, weight=1)
@@ -97,13 +116,66 @@ class CivitaiScraperGUI:
         self.is_scraping = False
         self.scraper = None
 
+        # Create scrollable container
+        self.setup_scrollable_frame()
+
         # Create UI
         self.create_widgets()
 
+    def setup_scrollable_frame(self):
+        """Set up a scrollable frame with auto-hiding scrollbar."""
+        # Create canvas and scrollbar
+        self.canvas = tk.Canvas(self.root, highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        # Grid layout
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.scrollbar.grid(row=0, column=1, sticky="ns")
+
+        # Create frame inside canvas
+        self.scrollable_frame = ttk.Frame(self.canvas)
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        # Bind events
+        self.scrollable_frame.bind("<Configure>", self._on_frame_configure)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+
+        # Mouse wheel scrolling
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.canvas.bind_all("<Button-4>", self._on_mousewheel)
+        self.canvas.bind_all("<Button-5>", self._on_mousewheel)
+
+    def _on_frame_configure(self, event):
+        """Update scroll region and show/hide scrollbar."""
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self._update_scrollbar_visibility()
+
+    def _on_canvas_configure(self, event):
+        """Resize frame to match canvas width."""
+        self.canvas.itemconfig(self.canvas_window, width=event.width)
+        self._update_scrollbar_visibility()
+
+    def _update_scrollbar_visibility(self):
+        """Show scrollbar only when content exceeds visible area."""
+        self.root.update_idletasks()
+        if self.scrollable_frame.winfo_reqheight() > self.canvas.winfo_height():
+            self.scrollbar.grid()
+        else:
+            self.scrollbar.grid_remove()
+
+    def _on_mousewheel(self, event):
+        """Handle mouse wheel scrolling."""
+        if self.scrollable_frame.winfo_reqheight() > self.canvas.winfo_height():
+            if event.num == 4 or event.delta > 0:
+                self.canvas.yview_scroll(-1, "units")
+            elif event.num == 5 or event.delta < 0:
+                self.canvas.yview_scroll(1, "units")
+
     def create_widgets(self):
         """Create all GUI widgets."""
-        # Main container with padding
-        main_frame = ttk.Frame(self.root, padding="10")
+        # Main container with padding (inside scrollable frame)
+        main_frame = ttk.Frame(self.scrollable_frame, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         main_frame.columnconfigure(1, weight=1)
 
@@ -118,7 +190,7 @@ class CivitaiScraperGUI:
         # Base Model
         row = 1
         ttk.Label(main_frame, text="Base Model:").grid(row=row, column=0, sticky=tk.W, pady=5)
-        self.base_model_var = tk.StringVar(value="Flux.1 D")
+        self.base_model_var = tk.StringVar(value="Any")
         base_model_combo = ttk.Combobox(
             main_frame,
             textvariable=self.base_model_var,
@@ -127,7 +199,7 @@ class CivitaiScraperGUI:
             width=30
         )
         base_model_combo.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
-        ttk.Label(main_frame, text="(Required)", foreground="gray").grid(
+        ttk.Label(main_frame, text="('Any' = all models)", foreground="gray").grid(
             row=row, column=2, sticky=tk.W, padx=(5, 0)
         )
 
@@ -172,6 +244,48 @@ class CivitaiScraperGUI:
             width=30
         )
         sort_combo.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+
+        # Time Period Filter
+        row += 1
+        ttk.Label(main_frame, text="Time Period:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.period_var = tk.StringVar(value="AllTime")
+        period_combo = ttk.Combobox(
+            main_frame,
+            textvariable=self.period_var,
+            values=self.PERIOD_OPTIONS,
+            state="readonly",
+            width=30
+        )
+        period_combo.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        ttk.Label(main_frame, text="(Filter by date)", foreground="gray").grid(
+            row=row, column=2, sticky=tk.W, padx=(5, 0)
+        )
+
+        # NSFW Filter
+        row += 1
+        ttk.Label(main_frame, text="NSFW Filter:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.nsfw_var = tk.StringVar(value="Any")
+        nsfw_combo = ttk.Combobox(
+            main_frame,
+            textvariable=self.nsfw_var,
+            values=self.NSFW_OPTIONS,
+            state="readonly",
+            width=30
+        )
+        nsfw_combo.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        ttk.Label(main_frame, text="(None=SFW only)", foreground="gray").grid(
+            row=row, column=2, sticky=tk.W, padx=(5, 0)
+        )
+
+        # Username Filter
+        row += 1
+        ttk.Label(main_frame, text="Username:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.username_var = tk.StringVar(value="")
+        username_entry = ttk.Entry(main_frame, textvariable=self.username_var)
+        username_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        ttk.Label(main_frame, text="(Filter by creator)", foreground="gray").grid(
+            row=row, column=2, sticky=tk.W, padx=(5, 0)
+        )
 
         # Delay
         row += 1
@@ -219,10 +333,30 @@ class CivitaiScraperGUI:
         )
         double_spaced_check.grid(row=row, column=1, sticky=tk.W, pady=5, padx=(5, 0))
 
-        # Separator
+        # Use Separator Checkbox
         row += 1
-        separator = ttk.Separator(main_frame, orient="horizontal")
-        separator.grid(row=row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        self.use_separator_var = tk.BooleanVar(value=False)
+        separator_check = ttk.Checkbutton(
+            main_frame,
+            text="Use visual separator lines between prompts (recommended)",
+            variable=self.use_separator_var
+        )
+        separator_check.grid(row=row, column=1, sticky=tk.W, pady=5, padx=(5, 0))
+
+        # API Key (masked entry)
+        row += 1
+        ttk.Label(main_frame, text="API Key:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.api_key_var = tk.StringVar(value="")
+        api_key_entry = ttk.Entry(main_frame, textvariable=self.api_key_var, show="*")
+        api_key_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        ttk.Label(main_frame, text="(Optional, for favorites)", foreground="gray").grid(
+            row=row, column=2, sticky=tk.W, padx=(5, 0)
+        )
+
+        # Horizontal Separator Line
+        row += 1
+        h_separator = ttk.Separator(main_frame, orient="horizontal")
+        h_separator.grid(row=row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
 
         # Progress Bar
         row += 1
@@ -326,38 +460,53 @@ class CivitaiScraperGUI:
     def scrape_thread(self):
         """Thread function for scraping."""
         try:
-            # Get parameters
-            base_model = self.base_model_var.get()
+            # Get parameters - "Any" means no filter (None)
+            base_model_selection = self.base_model_var.get()
+            base_model = None if base_model_selection == "Any" else base_model_selection
             model_type = self.model_type_var.get() if self.model_type_var.get() != "Any" else None
             max_images = self.max_images_var.get()
             sort = self.sort_var.get()
+            period = self.period_var.get() if self.period_var.get() != "AllTime" else None
+            nsfw = self.nsfw_var.get() if self.nsfw_var.get() != "Any" else None
+            username = self.username_var.get().strip() if self.username_var.get().strip() else None
             delay = self.delay_var.get()
             output_dir = self.output_dir_var.get()
             export_prompts = self.export_prompts_var.get()
             double_spaced = self.double_spaced_var.get()
+            use_separator = self.use_separator_var.get()
+            api_key = self.api_key_var.get().strip() if self.api_key_var.get().strip() else None
 
             # Log configuration
             self.log(f"Configuration:")
-            self.log(f"  Base Model: {base_model}")
+            self.log(f"  Base Model: {base_model or 'Any'}")
             self.log(f"  Model Type: {model_type or 'Any'}")
             self.log(f"  Max Images: {max_images}")
             self.log(f"  Sort By: {sort}")
+            self.log(f"  Period: {period or 'AllTime'}")
+            self.log(f"  NSFW: {nsfw or 'Any'}")
+            if username:
+                self.log(f"  Username: {username}")
             self.log(f"  Delay: {delay}s")
             self.log(f"  Output Dir: {output_dir}")
             self.log(f"  Export Prompts: {export_prompts}")
             if export_prompts:
                 self.log(f"  Double Spaced: {double_spaced}")
+                self.log(f"  Use Separator: {use_separator}")
+            if api_key:
+                self.log(f"  API Key: ****{api_key[-4:]}")
             self.log("")
 
             # Initialize scraper with custom logging
             self.scraper = ScraperWithLogging(
                 output_dir=output_dir,
                 delay=delay,
+                api_key=api_key,
                 log_callback=self.log
             )
 
-            # Scrape data using new images API with strict filtering
-            self.log(f"Strict filtering: Only images with base_model='{base_model}'")
+            # Scrape data - strict filtering only when specific base model selected
+            if base_model:
+                self.log(f"Strict filtering: Only images with base_model='{base_model}'")
 
             all_images = []
             page = 1
@@ -373,7 +522,11 @@ class CivitaiScraperGUI:
                     base_model=base_model,
                     model_type=model_type,
                     limit=min(200, images_per_page),
-                    page=page
+                    page=page,
+                    sort=sort,
+                    period=period,
+                    nsfw=nsfw,
+                    username=username
                 )
 
                 items = images_data.get("items", [])
@@ -381,7 +534,7 @@ class CivitaiScraperGUI:
                     self.log("No more images found.")
                     break
 
-                # Process each image with strict filtering
+                # Process each image - apply strict filtering only if base_model specified
                 added_this_page = 0
                 for image in items:
                     if len(all_images) >= max_images or not self.is_scraping:
@@ -389,12 +542,15 @@ class CivitaiScraperGUI:
 
                     processed_image = self.scraper.process_image_data(image)
 
-                    # Only include if base_model matches exactly
-                    if processed_image.get('base_model') == base_model:
+                    # If base_model specified, filter strictly; otherwise accept all
+                    if base_model is None or processed_image.get('base_model') == base_model:
                         all_images.append(processed_image)
                         added_this_page += 1
 
-                self.log(f"  Matched {added_this_page} out of {len(items)} images")
+                if base_model:
+                    self.log(f"  Matched {added_this_page} out of {len(items)} images")
+                else:
+                    self.log(f"  Added {added_this_page} images")
 
                 if added_this_page == 0:
                     pages_without_results += 1
@@ -437,7 +593,8 @@ class CivitaiScraperGUI:
 
                 if export_prompts:
                     self.log("Exporting prompts to text file...")
-                    self.scraper.export_prompts_only(all_images, double_spaced=double_spaced)
+                    self.scraper.export_prompts_only(all_images, double_spaced=double_spaced,
+                                                     use_separator=use_separator)
 
                 self.log(f"\nResults saved to {output_dir}/")
 
@@ -466,9 +623,9 @@ class CivitaiScraperGUI:
 class ScraperWithLogging(CivitaiScraper):
     """Extended scraper with logging callback."""
 
-    def __init__(self, output_dir="output", delay=1.0, log_callback=None):
+    def __init__(self, output_dir="output", delay=1.0, api_key=None, log_callback=None):
         """Initialize with logging callback."""
-        super().__init__(output_dir, delay)
+        super().__init__(output_dir, delay, api_key)
         self.log_callback = log_callback
 
     def log(self, message):

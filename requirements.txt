@@ -1,0 +1,5 @@
+# Civitai Image Prompt Scraper Dependencies
+# Python 3.7+ required
+
+# HTTP library for API requests
+requests>=2.25.0
