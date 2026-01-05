@@ -188,7 +188,7 @@ class CivitaiScraper:
         }
 
     def scrape_by_base_model(self,
-                            base_model: str,
+                            base_model: Optional[str] = None,
                             model_type: Optional[str] = None,
                             max_images: int = 100,
                             sort: str = "Most Reactions",
@@ -200,14 +200,14 @@ class CivitaiScraper:
                             model_version_id: Optional[int] = None,
                             post_id: Optional[int] = None) -> List[Dict]:
         """
-        Scrape prompts for a specific base model architecture.
+        Scrape prompts, optionally filtered by base model architecture.
 
         Args:
-            base_model: Base model architecture to scrape (e.g., 'SDXL 1.0', 'Pony', 'Flux.1 D')
+            base_model: Base model architecture to scrape (e.g., 'SDXL 1.0', 'Pony'). None for all.
             model_type: Optional model type filter (Checkpoint, LORA, etc.)
             max_images: Maximum number of images to scrape
             sort: Sort order (Most Reactions, Most Comments, Newest)
-            strict_filter: If True, only include images that exactly match the base_model
+            strict_filter: If True and base_model specified, only include exact matches
             period: Time period filter (AllTime, Year, Month, Week, Day)
             nsfw: NSFW filter (None, Soft, Mature, X)
             username: Filter by creator username
@@ -218,12 +218,12 @@ class CivitaiScraper:
         Returns:
             List of all scraped image data with prompts
         """
-        filter_desc = f"{base_model}"
+        filter_desc = base_model or "All base models"
         if model_type:
             filter_desc += f" ({model_type})"
         print(f"Scraping images for {filter_desc}...")
         print(f"Target: {max_images} images")
-        if strict_filter:
+        if strict_filter and base_model:
             print(f"Strict filtering: Only images with base_model='{base_model}'")
 
         all_images = []
@@ -262,8 +262,8 @@ class CivitaiScraper:
 
                 processed_image = self.process_image_data(image)
 
-                # Apply strict filtering if enabled
-                if strict_filter:
+                # Apply strict filtering only if base_model is specified and strict_filter is True
+                if strict_filter and base_model:
                     # Only include if base_model matches exactly
                     if processed_image.get('base_model') == base_model:
                         all_images.append(processed_image)
@@ -272,7 +272,7 @@ class CivitaiScraper:
                     all_images.append(processed_image)
                     added_this_page += 1
 
-            if strict_filter:
+            if strict_filter and base_model:
                 print(f"  Matched {added_this_page} out of {len(items)} images")
                 if added_this_page == 0:
                     pages_without_results += 1
@@ -283,6 +283,8 @@ class CivitaiScraper:
                 if pages_without_results >= max_empty_pages:
                     print(f"No matching images found in {max_empty_pages} consecutive pages. Stopping.")
                     break
+            else:
+                print(f"  Added {added_this_page} images")
 
             page += 1
             time.sleep(self.delay)
@@ -294,9 +296,10 @@ class CivitaiScraper:
                 break
 
         print(f"Scraped {len(all_images)} images")
-        if strict_filter and all_images:
+        if all_images:
             actual_base_models = set(img.get('base_model') for img in all_images)
-            print(f"Base models in results: {actual_base_models}")
+            if len(actual_base_models) > 1 or not base_model:
+                print(f"Base models in results: {actual_base_models}")
         return all_images
 
     def save_results(self, data: List[Dict], filename: str = None):
@@ -361,12 +364,12 @@ class CivitaiScraper:
 
 def main():
     """Main CLI interface."""
-    parser = argparse.ArgumentParser(description="Scrape image prompts from Civitai by base model architecture")
+    parser = argparse.ArgumentParser(description="Scrape image prompts from Civitai")
     parser.add_argument(
         "--base-model",
         type=str,
-        required=True,
-        help="Base model architecture (e.g., 'SD 1.5', 'SDXL 1.0', 'Pony', 'Flux.1 D', 'Flux.1 S')"
+        default=None,
+        help="Base model architecture (e.g., 'SD 1.5', 'SDXL 1.0', 'Pony', 'Flux.1 D'). Omit for all models."
     )
     parser.add_argument(
         "--model-type",

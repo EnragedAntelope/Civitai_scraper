@@ -17,8 +17,10 @@ class CivitaiScraperGUI:
     """GUI for Civitai scraper."""
 
     # Common base models from the Civitai interface
-    # Based on actual API data scan (2025-12-28)
+    # Note: "Any" allows scraping without base model filter
+    # New models can be added here as Civitai introduces them
     BASE_MODELS = [
+        "Any",  # No filter - get all base models
         "Flux.1 D",
         "Flux.1 S",
         "Flux.2 D",
@@ -103,7 +105,8 @@ class CivitaiScraperGUI:
         """Initialize the GUI."""
         self.root = root
         self.root.title("Civitai Image Prompt Scraper")
-        self.root.geometry("850x950")
+        self.root.geometry("700x700")
+        self.root.minsize(600, 500)
 
         # Make window resizable
         self.root.columnconfigure(0, weight=1)
@@ -113,13 +116,66 @@ class CivitaiScraperGUI:
         self.is_scraping = False
         self.scraper = None
 
+        # Create scrollable container
+        self.setup_scrollable_frame()
+
         # Create UI
         self.create_widgets()
 
+    def setup_scrollable_frame(self):
+        """Set up a scrollable frame with auto-hiding scrollbar."""
+        # Create canvas and scrollbar
+        self.canvas = tk.Canvas(self.root, highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        # Grid layout
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.scrollbar.grid(row=0, column=1, sticky="ns")
+
+        # Create frame inside canvas
+        self.scrollable_frame = ttk.Frame(self.canvas)
+        self.canvas_window = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        # Bind events
+        self.scrollable_frame.bind("<Configure>", self._on_frame_configure)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+
+        # Mouse wheel scrolling
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.canvas.bind_all("<Button-4>", self._on_mousewheel)
+        self.canvas.bind_all("<Button-5>", self._on_mousewheel)
+
+    def _on_frame_configure(self, event):
+        """Update scroll region and show/hide scrollbar."""
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self._update_scrollbar_visibility()
+
+    def _on_canvas_configure(self, event):
+        """Resize frame to match canvas width."""
+        self.canvas.itemconfig(self.canvas_window, width=event.width)
+        self._update_scrollbar_visibility()
+
+    def _update_scrollbar_visibility(self):
+        """Show scrollbar only when content exceeds visible area."""
+        self.root.update_idletasks()
+        if self.scrollable_frame.winfo_reqheight() > self.canvas.winfo_height():
+            self.scrollbar.grid()
+        else:
+            self.scrollbar.grid_remove()
+
+    def _on_mousewheel(self, event):
+        """Handle mouse wheel scrolling."""
+        if self.scrollable_frame.winfo_reqheight() > self.canvas.winfo_height():
+            if event.num == 4 or event.delta > 0:
+                self.canvas.yview_scroll(-1, "units")
+            elif event.num == 5 or event.delta < 0:
+                self.canvas.yview_scroll(1, "units")
+
     def create_widgets(self):
         """Create all GUI widgets."""
-        # Main container with padding
-        main_frame = ttk.Frame(self.root, padding="10")
+        # Main container with padding (inside scrollable frame)
+        main_frame = ttk.Frame(self.scrollable_frame, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         main_frame.columnconfigure(1, weight=1)
 
@@ -134,7 +190,7 @@ class CivitaiScraperGUI:
         # Base Model
         row = 1
         ttk.Label(main_frame, text="Base Model:").grid(row=row, column=0, sticky=tk.W, pady=5)
-        self.base_model_var = tk.StringVar(value="Flux.1 D")
+        self.base_model_var = tk.StringVar(value="Any")
         base_model_combo = ttk.Combobox(
             main_frame,
             textvariable=self.base_model_var,
@@ -143,7 +199,7 @@ class CivitaiScraperGUI:
             width=30
         )
         base_model_combo.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
-        ttk.Label(main_frame, text="(Required)", foreground="gray").grid(
+        ttk.Label(main_frame, text="('Any' = all models)", foreground="gray").grid(
             row=row, column=2, sticky=tk.W, padx=(5, 0)
         )
 
@@ -228,36 +284,6 @@ class CivitaiScraperGUI:
         username_entry = ttk.Entry(main_frame, textvariable=self.username_var)
         username_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
         ttk.Label(main_frame, text="(Filter by creator)", foreground="gray").grid(
-            row=row, column=2, sticky=tk.W, padx=(5, 0)
-        )
-
-        # Model ID Filter
-        row += 1
-        ttk.Label(main_frame, text="Model ID:").grid(row=row, column=0, sticky=tk.W, pady=5)
-        self.model_id_var = tk.StringVar(value="")
-        model_id_entry = ttk.Entry(main_frame, textvariable=self.model_id_var, width=30)
-        model_id_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
-        ttk.Label(main_frame, text="(Optional)", foreground="gray").grid(
-            row=row, column=2, sticky=tk.W, padx=(5, 0)
-        )
-
-        # Model Version ID Filter
-        row += 1
-        ttk.Label(main_frame, text="Model Version ID:").grid(row=row, column=0, sticky=tk.W, pady=5)
-        self.model_version_id_var = tk.StringVar(value="")
-        model_version_id_entry = ttk.Entry(main_frame, textvariable=self.model_version_id_var, width=30)
-        model_version_id_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
-        ttk.Label(main_frame, text="(Optional)", foreground="gray").grid(
-            row=row, column=2, sticky=tk.W, padx=(5, 0)
-        )
-
-        # Post ID Filter
-        row += 1
-        ttk.Label(main_frame, text="Post ID:").grid(row=row, column=0, sticky=tk.W, pady=5)
-        self.post_id_var = tk.StringVar(value="")
-        post_id_entry = ttk.Entry(main_frame, textvariable=self.post_id_var, width=30)
-        post_id_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
-        ttk.Label(main_frame, text="(Optional)", foreground="gray").grid(
             row=row, column=2, sticky=tk.W, padx=(5, 0)
         )
 
@@ -434,8 +460,9 @@ class CivitaiScraperGUI:
     def scrape_thread(self):
         """Thread function for scraping."""
         try:
-            # Get parameters
-            base_model = self.base_model_var.get()
+            # Get parameters - "Any" means no filter (None)
+            base_model_selection = self.base_model_var.get()
+            base_model = None if base_model_selection == "Any" else base_model_selection
             model_type = self.model_type_var.get() if self.model_type_var.get() != "Any" else None
             max_images = self.max_images_var.get()
             sort = self.sort_var.get()
@@ -449,23 +476,9 @@ class CivitaiScraperGUI:
             use_separator = self.use_separator_var.get()
             api_key = self.api_key_var.get().strip() if self.api_key_var.get().strip() else None
 
-            # Parse optional integer IDs
-            model_id = None
-            model_version_id = None
-            post_id = None
-            try:
-                if self.model_id_var.get().strip():
-                    model_id = int(self.model_id_var.get().strip())
-                if self.model_version_id_var.get().strip():
-                    model_version_id = int(self.model_version_id_var.get().strip())
-                if self.post_id_var.get().strip():
-                    post_id = int(self.post_id_var.get().strip())
-            except ValueError:
-                self.log("Warning: Invalid ID value, must be a number. Ignoring ID filters.")
-
             # Log configuration
             self.log(f"Configuration:")
-            self.log(f"  Base Model: {base_model}")
+            self.log(f"  Base Model: {base_model or 'Any'}")
             self.log(f"  Model Type: {model_type or 'Any'}")
             self.log(f"  Max Images: {max_images}")
             self.log(f"  Sort By: {sort}")
@@ -473,12 +486,6 @@ class CivitaiScraperGUI:
             self.log(f"  NSFW: {nsfw or 'Any'}")
             if username:
                 self.log(f"  Username: {username}")
-            if model_id:
-                self.log(f"  Model ID: {model_id}")
-            if model_version_id:
-                self.log(f"  Model Version ID: {model_version_id}")
-            if post_id:
-                self.log(f"  Post ID: {post_id}")
             self.log(f"  Delay: {delay}s")
             self.log(f"  Output Dir: {output_dir}")
             self.log(f"  Export Prompts: {export_prompts}")
@@ -497,8 +504,9 @@ class CivitaiScraperGUI:
                 log_callback=self.log
             )
 
-            # Scrape data using new images API with strict filtering
-            self.log(f"Strict filtering: Only images with base_model='{base_model}'")
+            # Scrape data - strict filtering only when specific base model selected
+            if base_model:
+                self.log(f"Strict filtering: Only images with base_model='{base_model}'")
 
             all_images = []
             page = 1
@@ -518,10 +526,7 @@ class CivitaiScraperGUI:
                     sort=sort,
                     period=period,
                     nsfw=nsfw,
-                    username=username,
-                    model_id=model_id,
-                    model_version_id=model_version_id,
-                    post_id=post_id
+                    username=username
                 )
 
                 items = images_data.get("items", [])
@@ -529,7 +534,7 @@ class CivitaiScraperGUI:
                     self.log("No more images found.")
                     break
 
-                # Process each image with strict filtering
+                # Process each image - apply strict filtering only if base_model specified
                 added_this_page = 0
                 for image in items:
                     if len(all_images) >= max_images or not self.is_scraping:
@@ -537,12 +542,15 @@ class CivitaiScraperGUI:
 
                     processed_image = self.scraper.process_image_data(image)
 
-                    # Only include if base_model matches exactly
-                    if processed_image.get('base_model') == base_model:
+                    # If base_model specified, filter strictly; otherwise accept all
+                    if base_model is None or processed_image.get('base_model') == base_model:
                         all_images.append(processed_image)
                         added_this_page += 1
 
-                self.log(f"  Matched {added_this_page} out of {len(items)} images")
+                if base_model:
+                    self.log(f"  Matched {added_this_page} out of {len(items)} images")
+                else:
+                    self.log(f"  Added {added_this_page} images")
 
                 if added_this_page == 0:
                     pages_without_results += 1
