@@ -81,7 +81,14 @@ class CivitaiScraper:
                             base_model: Optional[str] = None,
                             model_type: Optional[str] = None,
                             limit: int = 100,
-                            page: int = 1) -> Dict:
+                            page: int = 1,
+                            sort: str = "Most Reactions",
+                            period: Optional[str] = None,
+                            nsfw: Optional[str] = None,
+                            username: Optional[str] = None,
+                            model_id: Optional[int] = None,
+                            model_version_id: Optional[int] = None,
+                            post_id: Optional[int] = None) -> Dict:
         """
         Get images directly from the images API endpoint.
 
@@ -90,6 +97,13 @@ class CivitaiScraper:
             model_type: Model type filter
             limit: Number of results per page (max 200)
             page: Page number
+            sort: Sort order (Most Reactions, Most Comments, Newest)
+            period: Time period filter (AllTime, Year, Month, Week, Day)
+            nsfw: NSFW filter (None, Soft, Mature, X)
+            username: Filter by creator username
+            model_id: Filter by model ID
+            model_version_id: Filter by model version ID
+            post_id: Filter by post ID
 
         Returns:
             API response with images data
@@ -98,11 +112,29 @@ class CivitaiScraper:
         params = {
             "limit": min(limit, 200),
             "page": page,
-            "sort": "Most Reactions"
+            "sort": sort
         }
 
         if base_model:
             params["baseModels"] = base_model  # Note: API uses plural "baseModels"
+
+        if period:
+            params["period"] = period
+
+        if nsfw:
+            params["nsfw"] = nsfw
+
+        if username:
+            params["username"] = username
+
+        if model_id:
+            params["modelId"] = model_id
+
+        if model_version_id:
+            params["modelVersionId"] = model_version_id
+
+        if post_id:
+            params["postId"] = post_id
 
         try:
             response = self.session.get(url, params=params, timeout=60)
@@ -151,8 +183,14 @@ class CivitaiScraper:
                             base_model: str,
                             model_type: Optional[str] = None,
                             max_images: int = 100,
-                            sort: str = "Highest Rated",
-                            strict_filter: bool = True) -> List[Dict]:
+                            sort: str = "Most Reactions",
+                            strict_filter: bool = True,
+                            period: Optional[str] = None,
+                            nsfw: Optional[str] = None,
+                            username: Optional[str] = None,
+                            model_id: Optional[int] = None,
+                            model_version_id: Optional[int] = None,
+                            post_id: Optional[int] = None) -> List[Dict]:
         """
         Scrape prompts for a specific base model architecture.
 
@@ -160,8 +198,14 @@ class CivitaiScraper:
             base_model: Base model architecture to scrape (e.g., 'SDXL 1.0', 'Pony', 'Flux.1 D')
             model_type: Optional model type filter (Checkpoint, LORA, etc.)
             max_images: Maximum number of images to scrape
-            sort: Sort order for models
+            sort: Sort order (Most Reactions, Most Comments, Newest)
             strict_filter: If True, only include images that exactly match the base_model
+            period: Time period filter (AllTime, Year, Month, Week, Day)
+            nsfw: NSFW filter (None, Soft, Mature, X)
+            username: Filter by creator username
+            model_id: Filter by model ID
+            model_version_id: Filter by model version ID
+            post_id: Filter by post ID
 
         Returns:
             List of all scraped image data with prompts
@@ -187,7 +231,14 @@ class CivitaiScraper:
                 base_model=base_model,
                 model_type=model_type,
                 limit=min(200, images_per_page),
-                page=page
+                page=page,
+                sort=sort,
+                period=period,
+                nsfw=nsfw,
+                username=username,
+                model_id=model_id,
+                model_version_id=model_version_id,
+                post_id=post_id
             )
 
             items = images_data.get("items", [])
@@ -347,6 +398,38 @@ def main():
         action="store_true",
         help="Disable strict base model filtering (include mixed results)"
     )
+    parser.add_argument(
+        "--period",
+        type=str,
+        choices=["AllTime", "Year", "Month", "Week", "Day"],
+        help="Time period filter for images"
+    )
+    parser.add_argument(
+        "--nsfw",
+        type=str,
+        choices=["None", "Soft", "Mature", "X"],
+        help="NSFW content filter (None=SFW only, X=all NSFW levels)"
+    )
+    parser.add_argument(
+        "--username",
+        type=str,
+        help="Filter by creator username"
+    )
+    parser.add_argument(
+        "--model-id",
+        type=int,
+        help="Filter by specific model ID"
+    )
+    parser.add_argument(
+        "--model-version-id",
+        type=int,
+        help="Filter by specific model version ID"
+    )
+    parser.add_argument(
+        "--post-id",
+        type=int,
+        help="Filter by specific post ID"
+    )
 
     args = parser.parse_args()
 
@@ -359,7 +442,13 @@ def main():
         model_type=args.model_type,
         max_images=args.max_images,
         sort=args.sort,
-        strict_filter=not args.no_strict_filter
+        strict_filter=not args.no_strict_filter,
+        period=args.period,
+        nsfw=args.nsfw,
+        username=args.username,
+        model_id=args.model_id,
+        model_version_id=args.model_version_id,
+        post_id=args.post_id
     )
 
     # Save results

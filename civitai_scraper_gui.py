@@ -83,11 +83,27 @@ class CivitaiScraperGUI:
         "Newest"
     ]
 
+    PERIOD_OPTIONS = [
+        "AllTime",
+        "Year",
+        "Month",
+        "Week",
+        "Day"
+    ]
+
+    NSFW_OPTIONS = [
+        "Any",       # No filter
+        "None",      # SFW only
+        "Soft",      # Include soft NSFW
+        "Mature",    # Include mature
+        "X"          # Include all NSFW
+    ]
+
     def __init__(self, root):
         """Initialize the GUI."""
         self.root = root
         self.root.title("Civitai Image Prompt Scraper")
-        self.root.geometry("800x700")
+        self.root.geometry("800x850")
 
         # Make window resizable
         self.root.columnconfigure(0, weight=1)
@@ -172,6 +188,48 @@ class CivitaiScraperGUI:
             width=30
         )
         sort_combo.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+
+        # Time Period Filter
+        row += 1
+        ttk.Label(main_frame, text="Time Period:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.period_var = tk.StringVar(value="AllTime")
+        period_combo = ttk.Combobox(
+            main_frame,
+            textvariable=self.period_var,
+            values=self.PERIOD_OPTIONS,
+            state="readonly",
+            width=30
+        )
+        period_combo.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        ttk.Label(main_frame, text="(Filter by date)", foreground="gray").grid(
+            row=row, column=2, sticky=tk.W, padx=(5, 0)
+        )
+
+        # NSFW Filter
+        row += 1
+        ttk.Label(main_frame, text="NSFW Filter:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.nsfw_var = tk.StringVar(value="Any")
+        nsfw_combo = ttk.Combobox(
+            main_frame,
+            textvariable=self.nsfw_var,
+            values=self.NSFW_OPTIONS,
+            state="readonly",
+            width=30
+        )
+        nsfw_combo.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        ttk.Label(main_frame, text="(None=SFW only)", foreground="gray").grid(
+            row=row, column=2, sticky=tk.W, padx=(5, 0)
+        )
+
+        # Username Filter
+        row += 1
+        ttk.Label(main_frame, text="Username:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.username_var = tk.StringVar(value="")
+        username_entry = ttk.Entry(main_frame, textvariable=self.username_var)
+        username_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        ttk.Label(main_frame, text="(Filter by creator)", foreground="gray").grid(
+            row=row, column=2, sticky=tk.W, padx=(5, 0)
+        )
 
         # Delay
         row += 1
@@ -331,6 +389,9 @@ class CivitaiScraperGUI:
             model_type = self.model_type_var.get() if self.model_type_var.get() != "Any" else None
             max_images = self.max_images_var.get()
             sort = self.sort_var.get()
+            period = self.period_var.get() if self.period_var.get() != "AllTime" else None
+            nsfw = self.nsfw_var.get() if self.nsfw_var.get() != "Any" else None
+            username = self.username_var.get().strip() if self.username_var.get().strip() else None
             delay = self.delay_var.get()
             output_dir = self.output_dir_var.get()
             export_prompts = self.export_prompts_var.get()
@@ -342,6 +403,10 @@ class CivitaiScraperGUI:
             self.log(f"  Model Type: {model_type or 'Any'}")
             self.log(f"  Max Images: {max_images}")
             self.log(f"  Sort By: {sort}")
+            self.log(f"  Period: {period or 'AllTime'}")
+            self.log(f"  NSFW: {nsfw or 'Any'}")
+            if username:
+                self.log(f"  Username: {username}")
             self.log(f"  Delay: {delay}s")
             self.log(f"  Output Dir: {output_dir}")
             self.log(f"  Export Prompts: {export_prompts}")
@@ -373,7 +438,11 @@ class CivitaiScraperGUI:
                     base_model=base_model,
                     model_type=model_type,
                     limit=min(200, images_per_page),
-                    page=page
+                    page=page,
+                    sort=sort,
+                    period=period,
+                    nsfw=nsfw,
+                    username=username
                 )
 
                 items = images_data.get("items", [])
