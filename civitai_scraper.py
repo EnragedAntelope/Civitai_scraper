@@ -19,20 +19,28 @@ class CivitaiScraper:
 
     BASE_URL = "https://civitai.com/api/v1"
 
-    def __init__(self, output_dir: str = "output", delay: float = 1.0):
+    def __init__(self, output_dir: str = "output", delay: float = 1.0, api_key: str = None):
         """
         Initialize the scraper.
 
         Args:
             output_dir: Directory to save scraped data
             delay: Delay between API requests in seconds
+            api_key: Optional Civitai API key for authenticated requests
         """
         self.output_dir = output_dir
         self.delay = delay
+        self.api_key = api_key
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
+
+        # Add API key to headers if provided
+        if api_key:
+            self.session.headers.update({
+                'Authorization': f'Bearer {api_key}'
+            })
 
         # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
@@ -310,7 +318,8 @@ class CivitaiScraper:
 
         print(f"Data saved to {filepath}")
 
-    def export_prompts_only(self, data: List[Dict], filename: str = None, double_spaced: bool = False):
+    def export_prompts_only(self, data: List[Dict], filename: str = None,
+                           double_spaced: bool = False, use_separator: bool = False):
         """
         Export only prompts to a text file.
 
@@ -318,6 +327,7 @@ class CivitaiScraper:
             data: List of scraped image data
             filename: Output filename (auto-generated if None)
             double_spaced: If True, add extra blank line between prompts
+            use_separator: If True, use visual separator line instead of blank lines
         """
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -325,19 +335,26 @@ class CivitaiScraper:
 
         filepath = os.path.join(self.output_dir, filename)
 
+        # Define separator - characters unlikely to appear in prompts
+        separator = "─" * 50  # Unicode box-drawing character
+
         with open(filepath, 'w', encoding='utf-8') as f:
-            for item in data:
+            for i, item in enumerate(data):
                 if item.get("prompt"):
                     # Write prompt
                     f.write(f"{item.get('prompt')}\n")
                     # Write negative prompt if exists
                     if item.get("negative_prompt"):
-                        f.write(f"{item.get('negative_prompt')}\n")
-                    # Add spacing between prompts
-                    if double_spaced:
-                        f.write("\n\n")  # Two blank lines for double spacing
-                    else:
-                        f.write("\n")  # One blank line between prompts
+                        f.write(f"[NEGATIVE]: {item.get('negative_prompt')}\n")
+
+                    # Add spacing/separator between prompts (not after the last one)
+                    if i < len([d for d in data if d.get("prompt")]) - 1:
+                        if use_separator:
+                            f.write(f"\n{separator}\n\n")
+                        elif double_spaced:
+                            f.write("\n\n")  # Two blank lines for double spacing
+                        else:
+                            f.write("\n")  # One blank line between prompts
 
         print(f"Prompts exported to {filepath}")
 
@@ -430,11 +447,21 @@ def main():
         type=int,
         help="Filter by specific post ID"
     )
+    parser.add_argument(
+        "--use-separator",
+        action="store_true",
+        help="Use visual separator lines between prompts instead of blank lines"
+    )
+    parser.add_argument(
+        "--api-key",
+        type=str,
+        help="Civitai API key for authenticated features (favorites, hidden models)"
+    )
 
     args = parser.parse_args()
 
     # Initialize scraper
-    scraper = CivitaiScraper(output_dir=args.output_dir, delay=args.delay)
+    scraper = CivitaiScraper(output_dir=args.output_dir, delay=args.delay, api_key=args.api_key)
 
     # Scrape data
     results = scraper.scrape_by_base_model(
@@ -456,7 +483,8 @@ def main():
 
     # Export prompts if requested
     if args.export_prompts:
-        scraper.export_prompts_only(results, double_spaced=args.double_spaced)
+        scraper.export_prompts_only(results, double_spaced=args.double_spaced,
+                                    use_separator=args.use_separator)
 
     print("\nScraping completed!")
     print(f"Total images scraped: {len(results)}")

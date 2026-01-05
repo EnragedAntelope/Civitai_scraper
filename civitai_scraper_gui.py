@@ -103,7 +103,7 @@ class CivitaiScraperGUI:
         """Initialize the GUI."""
         self.root = root
         self.root.title("Civitai Image Prompt Scraper")
-        self.root.geometry("800x850")
+        self.root.geometry("850x950")
 
         # Make window resizable
         self.root.columnconfigure(0, weight=1)
@@ -231,6 +231,36 @@ class CivitaiScraperGUI:
             row=row, column=2, sticky=tk.W, padx=(5, 0)
         )
 
+        # Model ID Filter
+        row += 1
+        ttk.Label(main_frame, text="Model ID:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.model_id_var = tk.StringVar(value="")
+        model_id_entry = ttk.Entry(main_frame, textvariable=self.model_id_var, width=30)
+        model_id_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        ttk.Label(main_frame, text="(Optional)", foreground="gray").grid(
+            row=row, column=2, sticky=tk.W, padx=(5, 0)
+        )
+
+        # Model Version ID Filter
+        row += 1
+        ttk.Label(main_frame, text="Model Version ID:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.model_version_id_var = tk.StringVar(value="")
+        model_version_id_entry = ttk.Entry(main_frame, textvariable=self.model_version_id_var, width=30)
+        model_version_id_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        ttk.Label(main_frame, text="(Optional)", foreground="gray").grid(
+            row=row, column=2, sticky=tk.W, padx=(5, 0)
+        )
+
+        # Post ID Filter
+        row += 1
+        ttk.Label(main_frame, text="Post ID:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.post_id_var = tk.StringVar(value="")
+        post_id_entry = ttk.Entry(main_frame, textvariable=self.post_id_var, width=30)
+        post_id_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        ttk.Label(main_frame, text="(Optional)", foreground="gray").grid(
+            row=row, column=2, sticky=tk.W, padx=(5, 0)
+        )
+
         # Delay
         row += 1
         ttk.Label(main_frame, text="Delay (seconds):").grid(row=row, column=0, sticky=tk.W, pady=5)
@@ -277,10 +307,30 @@ class CivitaiScraperGUI:
         )
         double_spaced_check.grid(row=row, column=1, sticky=tk.W, pady=5, padx=(5, 0))
 
-        # Separator
+        # Use Separator Checkbox
         row += 1
-        separator = ttk.Separator(main_frame, orient="horizontal")
-        separator.grid(row=row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        self.use_separator_var = tk.BooleanVar(value=False)
+        separator_check = ttk.Checkbutton(
+            main_frame,
+            text="Use visual separator lines between prompts (recommended)",
+            variable=self.use_separator_var
+        )
+        separator_check.grid(row=row, column=1, sticky=tk.W, pady=5, padx=(5, 0))
+
+        # API Key (masked entry)
+        row += 1
+        ttk.Label(main_frame, text="API Key:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.api_key_var = tk.StringVar(value="")
+        api_key_entry = ttk.Entry(main_frame, textvariable=self.api_key_var, show="*")
+        api_key_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        ttk.Label(main_frame, text="(Optional, for favorites)", foreground="gray").grid(
+            row=row, column=2, sticky=tk.W, padx=(5, 0)
+        )
+
+        # Horizontal Separator Line
+        row += 1
+        h_separator = ttk.Separator(main_frame, orient="horizontal")
+        h_separator.grid(row=row, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
 
         # Progress Bar
         row += 1
@@ -396,6 +446,22 @@ class CivitaiScraperGUI:
             output_dir = self.output_dir_var.get()
             export_prompts = self.export_prompts_var.get()
             double_spaced = self.double_spaced_var.get()
+            use_separator = self.use_separator_var.get()
+            api_key = self.api_key_var.get().strip() if self.api_key_var.get().strip() else None
+
+            # Parse optional integer IDs
+            model_id = None
+            model_version_id = None
+            post_id = None
+            try:
+                if self.model_id_var.get().strip():
+                    model_id = int(self.model_id_var.get().strip())
+                if self.model_version_id_var.get().strip():
+                    model_version_id = int(self.model_version_id_var.get().strip())
+                if self.post_id_var.get().strip():
+                    post_id = int(self.post_id_var.get().strip())
+            except ValueError:
+                self.log("Warning: Invalid ID value, must be a number. Ignoring ID filters.")
 
             # Log configuration
             self.log(f"Configuration:")
@@ -407,17 +473,27 @@ class CivitaiScraperGUI:
             self.log(f"  NSFW: {nsfw or 'Any'}")
             if username:
                 self.log(f"  Username: {username}")
+            if model_id:
+                self.log(f"  Model ID: {model_id}")
+            if model_version_id:
+                self.log(f"  Model Version ID: {model_version_id}")
+            if post_id:
+                self.log(f"  Post ID: {post_id}")
             self.log(f"  Delay: {delay}s")
             self.log(f"  Output Dir: {output_dir}")
             self.log(f"  Export Prompts: {export_prompts}")
             if export_prompts:
                 self.log(f"  Double Spaced: {double_spaced}")
+                self.log(f"  Use Separator: {use_separator}")
+            if api_key:
+                self.log(f"  API Key: ****{api_key[-4:]}")
             self.log("")
 
             # Initialize scraper with custom logging
             self.scraper = ScraperWithLogging(
                 output_dir=output_dir,
                 delay=delay,
+                api_key=api_key,
                 log_callback=self.log
             )
 
@@ -442,7 +518,10 @@ class CivitaiScraperGUI:
                     sort=sort,
                     period=period,
                     nsfw=nsfw,
-                    username=username
+                    username=username,
+                    model_id=model_id,
+                    model_version_id=model_version_id,
+                    post_id=post_id
                 )
 
                 items = images_data.get("items", [])
@@ -506,7 +585,8 @@ class CivitaiScraperGUI:
 
                 if export_prompts:
                     self.log("Exporting prompts to text file...")
-                    self.scraper.export_prompts_only(all_images, double_spaced=double_spaced)
+                    self.scraper.export_prompts_only(all_images, double_spaced=double_spaced,
+                                                     use_separator=use_separator)
 
                 self.log(f"\nResults saved to {output_dir}/")
 
@@ -535,9 +615,9 @@ class CivitaiScraperGUI:
 class ScraperWithLogging(CivitaiScraper):
     """Extended scraper with logging callback."""
 
-    def __init__(self, output_dir="output", delay=1.0, log_callback=None):
+    def __init__(self, output_dir="output", delay=1.0, api_key=None, log_callback=None):
         """Initialize with logging callback."""
-        super().__init__(output_dir, delay)
+        super().__init__(output_dir, delay, api_key)
         self.log_callback = log_callback
 
     def log(self, message):
