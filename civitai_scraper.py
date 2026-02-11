@@ -8,8 +8,9 @@ Scrapes image prompts from Civitai based on model type.
 import requests
 import json
 import os
+import re
 import time
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple, Set
 from datetime import datetime
 import argparse
 
@@ -18,6 +19,122 @@ class CivitaiScraper:
     """Scraper for Civitai images and prompts."""
 
     BASE_URL = "https://civitai.com/api/v1"
+
+    # Common banned word groups (used by GUI checkboxes)
+    BANNED_CHARACTER_TAGS = [
+        "1girl", "1woman", "1boy", "1man", "solo", "looking at viewer",
+    ]
+    BANNED_SCORING_TAGS = [
+        "score_", "rating_",
+    ]
+
+    # Built-in presets for prompt mining
+    # Note: banned_words here are subject-specific only;
+    # character/scoring tags are handled separately via filter flags
+    MINING_PRESETS = {
+        "Custom": {
+            "keywords": {},
+            "required_words": [],
+            "banned_words": [],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 1,
+        },
+        "Space / Sci-Fi": {
+            "keywords": {
+                "space": 1, "stars": 1, "galaxy": 1, "nebula": 2, "planet": 1,
+                "spaceship": 2, "starship": 2, "cockpit": 2, "airlock": 2,
+                "thruster": 2, "hull": 2, "zero-gravity": 3, "orbit": 2,
+                "holographic": 1, "visor": 2, "corridor": 1, "engine": 1,
+                "asteroid": 2, "sci-fi": 1, "futuristic": 1, "station": 1,
+            },
+            "required_words": [
+                "space", "galaxy", "planet", "spaceship", "nebula",
+                "orbit", "starship", "sci-fi", "stars",
+            ],
+            "banned_words": [
+                "samurai", "tokyo", "geisha", "poptart",
+                "fantasy", "magic", "sword", "witch",
+            ],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 2,
+        },
+        "Fantasy / Medieval": {
+            "keywords": {
+                "castle": 2, "knight": 2, "dragon": 3, "sword": 2, "shield": 1,
+                "throne": 2, "kingdom": 2, "wizard": 2, "enchanted": 2, "mystical": 2,
+                "dungeon": 2, "fortress": 2, "armor": 1, "tavern": 1, "medieval": 2,
+                "fantasy": 1, "magic": 1, "ancient": 1, "mythical": 1,
+            },
+            "required_words": [
+                "fantasy", "medieval", "castle", "dragon", "knight",
+                "kingdom", "magic", "wizard",
+            ],
+            "banned_words": [
+                "cyberpunk", "futuristic", "modern", "sci-fi",
+                "spaceship", "robot", "neon",
+            ],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 2,
+        },
+        "Cyberpunk": {
+            "keywords": {
+                "neon": 2, "hologram": 2, "cybernetic": 3, "augmented": 2, "chrome": 2,
+                "dystopian": 2, "megacity": 2, "hacker": 2, "implant": 2, "circuit": 1,
+                "android": 2, "digital": 1, "rain": 1, "skyscraper": 1, "tech": 1,
+                "cyberpunk": 1, "cyber": 1, "futuristic": 1,
+            },
+            "required_words": [
+                "cyberpunk", "neon", "cyber", "futuristic",
+                "dystopian", "chrome", "hologram",
+            ],
+            "banned_words": [
+                "medieval", "fantasy", "pastoral",
+                "forest", "cottage",
+            ],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 2,
+        },
+        "Nature / Landscape": {
+            "keywords": {
+                "mountain": 2, "forest": 2, "river": 1, "waterfall": 2, "sunset": 2,
+                "aurora": 3, "canyon": 2, "meadow": 1, "ocean": 2, "valley": 2,
+                "glacier": 2, "wilderness": 2, "clouds": 1, "lake": 1, "cliff": 1,
+                "horizon": 1, "landscape": 1, "nature": 1, "scenery": 1,
+            },
+            "required_words": [
+                "landscape", "nature", "mountain", "forest",
+                "ocean", "sunset", "valley", "scenery",
+            ],
+            "banned_words": [
+                "indoor", "room", "cyberpunk", "robot",
+            ],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 2,
+        },
+        "Architecture / Urban": {
+            "keywords": {
+                "building": 1, "skyscraper": 2, "cathedral": 2, "bridge": 2, "tower": 1,
+                "facade": 2, "interior": 1, "dome": 2, "archway": 2, "columns": 1,
+                "staircase": 1, "skyline": 2, "street": 1, "plaza": 1, "monument": 2,
+                "brutalist": 2, "architecture": 1, "city": 1, "urban": 1,
+            },
+            "required_words": [
+                "architecture", "building", "city", "urban",
+                "skyline", "cathedral", "facade",
+            ],
+            "banned_words": [
+                "nature", "forest", "animal", "fantasy", "magic",
+            ],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 2,
+        },
+    }
 
     def __init__(self, output_dir: str = "output", delay: float = 1.0, api_key: str = None):
         """
@@ -96,7 +213,8 @@ class CivitaiScraper:
                             username: Optional[str] = None,
                             model_id: Optional[int] = None,
                             model_version_id: Optional[int] = None,
-                            post_id: Optional[int] = None) -> Dict:
+                            post_id: Optional[int] = None,
+                            cursor: Optional[str] = None) -> Dict:
         """
         Get images directly from the images API endpoint.
 
@@ -104,7 +222,7 @@ class CivitaiScraper:
             base_model: Base model architecture filter
             model_type: Model type filter
             limit: Number of results per page (max 200)
-            page: Page number
+            page: Page number (used only if cursor is not provided)
             sort: Sort order (Most Reactions, Most Comments, Newest)
             period: Time period filter (AllTime, Year, Month, Week, Day)
             nsfw: NSFW filter (None, Soft, Mature, X)
@@ -112,16 +230,22 @@ class CivitaiScraper:
             model_id: Filter by model ID
             model_version_id: Filter by model version ID
             post_id: Filter by post ID
+            cursor: Cursor for pagination (overrides page if provided)
 
         Returns:
-            API response with images data
+            API response with images data (includes metadata.nextCursor)
         """
         url = f"{self.BASE_URL}/images"
         params = {
             "limit": min(limit, 200),
-            "page": page,
             "sort": sort
         }
+
+        # Use cursor-based pagination if available, else page-based
+        if cursor:
+            params["cursor"] = cursor
+        else:
+            params["page"] = page
 
         if base_model:
             params["baseModels"] = base_model  # Note: API uses plural "baseModels"
@@ -227,26 +351,28 @@ class CivitaiScraper:
             print(f"Strict filtering: Only images with base_model='{base_model}'")
 
         all_images = []
-        page = 1
-        images_per_page = min(200, max_images * 3 if strict_filter else max_images)  # Fetch more if filtering
+        cursor = None
+        pages_fetched = 0
+        images_per_page = min(200, max_images * 3 if strict_filter else max_images)
         pages_without_results = 0
-        max_empty_pages = 5  # Stop if we get 5 pages with no matching results
+        max_empty_pages = 5
 
         while len(all_images) < max_images:
-            print(f"Fetching page {page}... (currently have {len(all_images)} images)")
+            pages_fetched += 1
+            print(f"Fetching page {pages_fetched}... (currently have {len(all_images)} images)")
 
             images_data = self.get_images_by_filter(
                 base_model=base_model,
                 model_type=model_type,
                 limit=min(200, images_per_page),
-                page=page,
                 sort=sort,
                 period=period,
                 nsfw=nsfw,
                 username=username,
                 model_id=model_id,
                 model_version_id=model_version_id,
-                post_id=post_id
+                post_id=post_id,
+                cursor=cursor,
             )
 
             items = images_data.get("items", [])
@@ -254,7 +380,6 @@ class CivitaiScraper:
                 print("No more images found.")
                 break
 
-            # Process each image
             added_this_page = 0
             for image in items:
                 if len(all_images) >= max_images:
@@ -262,9 +387,7 @@ class CivitaiScraper:
 
                 processed_image = self.process_image_data(image)
 
-                # Apply strict filtering only if base_model is specified and strict_filter is True
                 if strict_filter and base_model:
-                    # Only include if base_model matches exactly
                     if processed_image.get('base_model') == base_model:
                         all_images.append(processed_image)
                         added_this_page += 1
@@ -279,21 +402,20 @@ class CivitaiScraper:
                 else:
                     pages_without_results = 0
 
-                # Stop if we've had too many pages without results
                 if pages_without_results >= max_empty_pages:
                     print(f"No matching images found in {max_empty_pages} consecutive pages. Stopping.")
                     break
             else:
                 print(f"  Added {added_this_page} images")
 
-            page += 1
-            time.sleep(self.delay)
-
-            # Check if we've reached the end
+            # Cursor-based pagination
             metadata = images_data.get("metadata", {})
-            if metadata.get("currentPage") >= metadata.get("totalPages", 1):
+            cursor = metadata.get("nextCursor")
+            if not cursor:
                 print("Reached last page.")
                 break
+
+            time.sleep(self.delay)
 
         print(f"Scraped {len(all_images)} images")
         if all_images:
@@ -322,7 +444,8 @@ class CivitaiScraper:
         print(f"Data saved to {filepath}")
 
     def export_prompts_only(self, data: List[Dict], filename: str = None,
-                           double_spaced: bool = False, use_separator: bool = False):
+                           double_spaced: bool = False, use_separator: bool = False,
+                           positive_only: bool = False, one_per_line: bool = False):
         """
         Export only prompts to a text file.
 
@@ -331,6 +454,9 @@ class CivitaiScraper:
             filename: Output filename (auto-generated if None)
             double_spaced: If True, add extra blank line between prompts
             use_separator: If True, use visual separator line instead of blank lines
+            positive_only: If True, skip negative prompts in output
+            one_per_line: If True, clean and collapse each prompt to a single line
+                          with no separators (overrides double_spaced and use_separator)
         """
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -342,24 +468,271 @@ class CivitaiScraper:
         separator = "─" * 50  # Unicode box-drawing character
 
         with open(filepath, 'w', encoding='utf-8') as f:
-            for i, item in enumerate(data):
-                if item.get("prompt"):
-                    # Write prompt
-                    f.write(f"{item.get('prompt')}\n")
-                    # Write negative prompt if exists
-                    if item.get("negative_prompt"):
-                        f.write(f"[NEGATIVE]: {item.get('negative_prompt')}\n")
+            prompts_written = 0
+            total_with_prompts = sum(1 for d in data if d.get("prompt"))
 
-                    # Add spacing/separator between prompts (not after the last one)
-                    if i < len([d for d in data if d.get("prompt")]) - 1:
+            for item in data:
+                if item.get("prompt"):
+                    prompt_text = item.get("prompt")
+
+                    if one_per_line:
+                        # Clean format: one cleaned prompt per line, no extras
+                        prompt_text = self.clean_prompt(prompt_text)
+                        f.write(f"{prompt_text}\n")
+                    else:
+                        # Standard format
+                        f.write(f"{prompt_text}\n")
+                        if not positive_only and item.get("negative_prompt"):
+                            f.write(f"[NEGATIVE]: {item.get('negative_prompt')}\n")
+
+                    prompts_written += 1
+
+                    # Add spacing/separator (not after last, not in one_per_line mode)
+                    if not one_per_line and prompts_written < total_with_prompts:
                         if use_separator:
                             f.write(f"\n{separator}\n\n")
                         elif double_spaced:
-                            f.write("\n\n")  # Two blank lines for double spacing
+                            f.write("\n\n")
                         else:
-                            f.write("\n")  # One blank line between prompts
+                            f.write("\n")
 
         print(f"Prompts exported to {filepath}")
+
+    @staticmethod
+    def clean_prompt(raw: str) -> str:
+        """
+        Clean a raw prompt by removing LoRA/embedding tags, weight syntax, and stray brackets.
+
+        Args:
+            raw: Raw prompt string from image metadata
+
+        Returns:
+            Cleaned prompt string
+        """
+        clean = raw.replace('\n', ' ')
+        # Remove <lora:...> and <embedding:...> tags
+        clean = re.sub(r"<(lora|embedding):[^>]*>", "", clean)
+        # Remove weight syntax like (word:1.2) -> word
+        clean = re.sub(r"\(([^:]+):[0-9.]+\)", r"\1", clean)
+        # Remove stray brackets
+        clean = re.sub(r"[\(\)\[\]]", "", clean)
+        # Collapse whitespace
+        clean = re.sub(r"\s+", " ", clean).strip()
+        return clean
+
+    @staticmethod
+    def evaluate_prompt(prompt: str, keywords: Dict[str, int],
+                        required_words: List[str], banned_words: List[str],
+                        min_length: int = 100, max_commas: int = 15,
+                        min_score: int = 3) -> Tuple[bool, int]:
+        """
+        Evaluate a prompt against quality criteria.
+
+        Args:
+            prompt: Cleaned prompt string
+            keywords: Dict of keyword -> weight for scoring
+            required_words: At least one must appear
+            banned_words: Any appearance causes instant rejection
+            min_length: Minimum character length
+            max_commas: Maximum comma count (filters tag-soup prompts)
+            min_score: Minimum keyword score to pass
+
+        Returns:
+            Tuple of (passes: bool, score: int)
+        """
+        p_lower = prompt.lower()
+
+        # Filter: minimum length
+        if len(prompt) < min_length:
+            return False, 0
+
+        # Filter: banned words (instant rejection)
+        for bad in banned_words:
+            if bad.lower() in p_lower:
+                return False, 0
+
+        # Filter: required words (at least one must appear)
+        # If no required words specified, fall back to keyword list
+        check_words = required_words if required_words else list(keywords.keys())
+        if check_words:
+            if not any(word.lower() in p_lower for word in check_words):
+                return False, 0
+
+        # Filter: tag-soup detection (too many commas)
+        if p_lower.count(",") > max_commas:
+            return False, 0
+
+        # Score against weighted keywords
+        score = 0
+        for word, points in keywords.items():
+            if word.lower() in p_lower:
+                score += points
+
+        return score >= min_score, score
+
+    def mine_prompts(self, keywords: Dict[str, int],
+                     required_words: List[str], banned_words: List[str],
+                     min_length: int = 100, max_commas: int = 15,
+                     min_score: int = 3, target_count: int = 50,
+                     sort: str = "Newest", period: Optional[str] = None,
+                     nsfw: Optional[str] = None,
+                     base_model: Optional[str] = None,
+                     is_running_callback=None,
+                     log_callback=None) -> List[Tuple[str, int]]:
+        """
+        Mine prompts from Civitai images using content-based scoring.
+
+        Scans through images and evaluates each prompt against the given
+        criteria, returning high-quality matches for the specified subject.
+
+        Args:
+            keywords: Dict of keyword -> weight for scoring
+            required_words: At least one must appear in prompt
+            banned_words: Any appearance causes instant rejection
+            min_length: Minimum prompt character length
+            max_commas: Maximum comma count (filters tag-soup)
+            min_score: Minimum keyword score threshold
+            target_count: Number of matching prompts to find
+            sort: Sort order for scanning (Newest, Most Reactions, Most Comments)
+            nsfw: NSFW filter (None, Soft, Mature, X)
+            base_model: Optional base model filter
+            is_running_callback: Callable returning bool, checked each iteration
+            log_callback: Callable for logging progress messages
+
+        Returns:
+            List of (cleaned_prompt, score) tuples sorted by score descending
+        """
+        def _log(msg):
+            if log_callback:
+                log_callback(msg)
+            else:
+                print(msg)
+
+        def _is_running():
+            if is_running_callback:
+                return is_running_callback()
+            return True
+
+        found_prompts: Set[str] = set()
+        results: List[Tuple[str, int]] = []
+        cursor = None
+        pages_fetched = 0
+        scanned = 0
+        max_pages = 200  # Safety limit
+
+        _log(f"Mining for {target_count} matching prompts...")
+        _log(f"Scanning by '{sort}' with {len(keywords)} weighted keywords")
+        _log(f"Filters: min_length={min_length}, max_commas={max_commas}, min_score={min_score}")
+        _log("")
+
+        while len(results) < target_count and _is_running() and pages_fetched < max_pages:
+            images_data = self.get_images_by_filter(
+                base_model=base_model,
+                limit=200,
+                sort=sort,
+                period=period,
+                nsfw=nsfw,
+                cursor=cursor,
+            )
+
+            items = images_data.get("items", [])
+            if not items:
+                _log("No more images available from API.")
+                break
+
+            pages_fetched += 1
+
+            for item in items:
+                if len(results) >= target_count or not _is_running():
+                    break
+
+                scanned += 1
+                meta = item.get("meta") or {}
+                raw_prompt = meta.get("prompt", "") if isinstance(meta, dict) else ""
+
+                if not raw_prompt:
+                    continue
+
+                cleaned = self.clean_prompt(raw_prompt)
+                passes, score = self.evaluate_prompt(
+                    cleaned, keywords, required_words, banned_words,
+                    min_length, max_commas, min_score
+                )
+
+                if passes and cleaned not in found_prompts:
+                    found_prompts.add(cleaned)
+                    results.append((cleaned, score))
+                    _log(f"[MATCH #{len(results)}] Score: {score} | Scanned: {scanned}")
+                    _log(f"  {cleaned[:120]}...")
+
+            _log(f"Page {pages_fetched} done. Scanned {scanned} images, found {len(results)} matches.")
+
+            # Cursor-based pagination
+            metadata = images_data.get("metadata", {})
+            cursor = metadata.get("nextCursor")
+            if not cursor:
+                _log("Reached last available page.")
+                break
+
+            time.sleep(self.delay)
+
+        # Sort by score descending
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results
+
+    def save_mined_json(self, prompts: List[Tuple[str, int]], filename: str = None):
+        """
+        Save mined prompts to a JSON file.
+
+        Args:
+            prompts: List of (prompt, score) tuples
+            filename: Output filename (auto-generated if None)
+        """
+        if filename is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"mined_prompts_{timestamp}.json"
+
+        filepath = os.path.join(self.output_dir, filename)
+        data = [{"prompt": prompt, "score": score} for prompt, score in prompts]
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+        print(f"Mined prompts saved to {filepath}")
+
+    def export_mined_prompts(self, prompts: List[Tuple[str, int]],
+                             filename: str = None,
+                             use_separator: bool = True,
+                             one_per_line: bool = False):
+        """
+        Export mined prompts to a text file.
+
+        Args:
+            prompts: List of (prompt, score) tuples
+            filename: Output filename (auto-generated if None)
+            use_separator: Use visual separator lines between prompts
+            one_per_line: If True, write one prompt per line with no spacing
+                          (overrides use_separator)
+        """
+        if filename is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"mined_prompts_{timestamp}.txt"
+
+        filepath = os.path.join(self.output_dir, filename)
+        separator = "\u2500" * 50  # Unicode box-drawing character
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            for i, (prompt, score) in enumerate(prompts):
+                f.write(f"{prompt}\n")
+
+                # Add separator between prompts (not after the last one)
+                if not one_per_line and i < len(prompts) - 1:
+                    if use_separator:
+                        f.write(f"\n{separator}\n\n")
+                    else:
+                        f.write("\n")
+
+        print(f"Mined prompts exported to {filepath}")
 
 
 def main():
@@ -461,37 +834,146 @@ def main():
         help="Civitai API key for authenticated features (favorites, hidden models)"
     )
 
+    # Prompt mining arguments
+    parser.add_argument(
+        "--mine",
+        action="store_true",
+        help="Enable prompt mining mode (find best prompts for a subject)"
+    )
+    parser.add_argument(
+        "--mine-preset",
+        type=str,
+        choices=list(CivitaiScraper.MINING_PRESETS.keys()),
+        help="Use a built-in mining preset"
+    )
+    parser.add_argument(
+        "--mine-keywords",
+        type=str,
+        help="Comma-separated keyword:weight pairs (e.g., 'cockpit:2,thruster:3')"
+    )
+    parser.add_argument(
+        "--mine-required",
+        type=str,
+        help="Comma-separated required words (at least one must appear)"
+    )
+    parser.add_argument(
+        "--mine-banned",
+        type=str,
+        help="Comma-separated banned words (instant rejection)"
+    )
+    parser.add_argument(
+        "--mine-min-length",
+        type=int,
+        default=100,
+        help="Minimum prompt length for mining (default: 100)"
+    )
+    parser.add_argument(
+        "--mine-max-commas",
+        type=int,
+        default=15,
+        help="Maximum commas in prompt for mining (default: 15)"
+    )
+    parser.add_argument(
+        "--mine-min-score",
+        type=int,
+        default=3,
+        help="Minimum keyword score for mining (default: 3)"
+    )
+    parser.add_argument(
+        "--mine-target",
+        type=int,
+        default=50,
+        help="Number of matching prompts to find (default: 50)"
+    )
+
     args = parser.parse_args()
 
     # Initialize scraper
     scraper = CivitaiScraper(output_dir=args.output_dir, delay=args.delay, api_key=args.api_key)
 
-    # Scrape data
-    results = scraper.scrape_by_base_model(
-        base_model=args.base_model,
-        model_type=args.model_type,
-        max_images=args.max_images,
-        sort=args.sort,
-        strict_filter=not args.no_strict_filter,
-        period=args.period,
-        nsfw=args.nsfw,
-        username=args.username,
-        model_id=args.model_id,
-        model_version_id=args.model_version_id,
-        post_id=args.post_id
-    )
+    if args.mine:
+        # Prompt mining mode
+        keywords = {}
+        required_words = []
+        banned_words = []
+        min_length = args.mine_min_length
+        max_commas = args.mine_max_commas
+        min_score = args.mine_min_score
 
-    # Save results
-    scraper.save_results(results)
+        # Load preset if specified
+        if args.mine_preset and args.mine_preset in CivitaiScraper.MINING_PRESETS:
+            preset = CivitaiScraper.MINING_PRESETS[args.mine_preset]
+            keywords = dict(preset["keywords"])
+            required_words = list(preset["required_words"])
+            banned_words = list(preset["banned_words"])
+            min_length = preset["min_length"]
+            max_commas = preset["max_commas"]
+            min_score = preset["min_score"]
 
-    # Export prompts if requested
-    if args.export_prompts:
-        scraper.export_prompts_only(results, double_spaced=args.double_spaced,
-                                    use_separator=args.use_separator)
+        # Override with custom values if provided
+        if args.mine_keywords:
+            for pair in args.mine_keywords.split(","):
+                pair = pair.strip()
+                if ":" in pair:
+                    word, weight = pair.rsplit(":", 1)
+                    keywords[word.strip()] = int(weight.strip())
 
-    print("\nScraping completed!")
-    print(f"Total images scraped: {len(results)}")
-    print(f"Images with prompts: {sum(1 for r in results if r.get('prompt'))}")
+        if args.mine_required:
+            required_words = [w.strip() for w in args.mine_required.split(",") if w.strip()]
+
+        if args.mine_banned:
+            banned_words = [w.strip() for w in args.mine_banned.split(",") if w.strip()]
+
+        if not keywords:
+            print("Error: No keywords specified. Use --mine-preset or --mine-keywords.")
+            return
+
+        results = scraper.mine_prompts(
+            keywords=keywords,
+            required_words=required_words,
+            banned_words=banned_words,
+            min_length=min_length,
+            max_commas=max_commas,
+            min_score=min_score,
+            target_count=args.mine_target,
+            sort=args.sort,
+            period=args.period,
+            nsfw=args.nsfw,
+            base_model=args.base_model,
+        )
+
+        if results:
+            scraper.export_mined_prompts(results, use_separator=args.use_separator)
+            print(f"\nMining completed! Found {len(results)} matching prompts.")
+        else:
+            print("\nNo matching prompts found.")
+    else:
+        # Normal scraping mode
+        results = scraper.scrape_by_base_model(
+            base_model=args.base_model,
+            model_type=args.model_type,
+            max_images=args.max_images,
+            sort=args.sort,
+            strict_filter=not args.no_strict_filter,
+            period=args.period,
+            nsfw=args.nsfw,
+            username=args.username,
+            model_id=args.model_id,
+            model_version_id=args.model_version_id,
+            post_id=args.post_id
+        )
+
+        # Save results
+        scraper.save_results(results)
+
+        # Export prompts if requested
+        if args.export_prompts:
+            scraper.export_prompts_only(results, double_spaced=args.double_spaced,
+                                        use_separator=args.use_separator)
+
+        print("\nScraping completed!")
+        print(f"Total images scraped: {len(results)}")
+        print(f"Images with prompts: {sum(1 for r in results if r.get('prompt'))}")
 
 
 if __name__ == "__main__":
