@@ -54,7 +54,7 @@ class CivitaiScraper:
             ],
             "banned_words": [
                 "samurai", "tokyo", "geisha", "poptart",
-                "fantasy", "magic", "sword", "witch",
+                "fantasy", "magic", "sword", "witch", "buzz",
             ],
             "min_length": 50,
             "max_commas": 20,
@@ -73,7 +73,7 @@ class CivitaiScraper:
             ],
             "banned_words": [
                 "cyberpunk", "futuristic", "modern", "sci-fi",
-                "spaceship", "robot", "neon",
+                "spaceship", "robot", "neon", "buzz",
             ],
             "min_length": 50,
             "max_commas": 20,
@@ -92,7 +92,7 @@ class CivitaiScraper:
             ],
             "banned_words": [
                 "medieval", "fantasy", "pastoral",
-                "forest", "cottage",
+                "forest", "cottage", "buzz",
             ],
             "min_length": 50,
             "max_commas": 20,
@@ -110,7 +110,7 @@ class CivitaiScraper:
                 "ocean", "sunset", "valley", "scenery",
             ],
             "banned_words": [
-                "indoor", "room", "cyberpunk", "robot",
+                "indoor", "room", "cyberpunk", "robot", "buzz",
             ],
             "min_length": 50,
             "max_commas": 20,
@@ -128,7 +128,141 @@ class CivitaiScraper:
                 "skyline", "cathedral", "facade",
             ],
             "banned_words": [
-                "nature", "forest", "animal", "fantasy", "magic",
+                "nature", "forest", "animal", "fantasy", "magic", "buzz",
+            ],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 2,
+        },
+        "Futuristic": {
+            "keywords": {
+                "futuristic": 2, "cyberpunk": 2, "sci-fi": 2, "high-tech": 2,
+                "neon": 1, "hologram": 1, "mecha": 1, "android": 1,
+                "spaceship": 1, "cybernetic": 1, "metropolis": 1, "utopian": 1,
+                "sleek": 1, "advanced": 1, "chrome": 1, "laser": 1,
+            },
+            "required_words": ["futuristic", "sci-fi", "cyber", "tech", "future"],
+            "banned_words": [
+                "medieval", "historical", "ancient", "antique", "vintage",
+                "retro", "steampunk", "fantasy", "magic", "wizard", "knight", "buzz",
+            ],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 3,
+        },
+        "Horror": {
+            "keywords": {
+                "horror": 2, "creepy": 2, "eerie": 2, "macabre": 2,
+                "darkness": 1, "haunted": 1, "ghostly": 1, "lovecraftian": 1,
+                "gothic": 1, "nightmare": 1, "skull": 1, "monster": 1,
+                "abandoned": 1, "misty": 1, "blood": 1, "surreal": 1,
+            },
+            "required_words": ["horror", "scary", "dark", "creepy", "macabre"],
+            "banned_words": [
+                "cheerful", "bright", "sunny", "vibrant", "cute",
+                "kawaii", "whimsical", "happy", "colorful", "pastel", "buzz",
+            ],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 3,
+        },
+        "Gigantism": {
+            "keywords": {
+                "colossal": 3, "monolithic": 3, "massive": 2, "towering": 2,
+                "tiny human": 2, "scale comparison": 2, "megastructure": 3,
+                "looming": 2, "immense": 1, "cyclopean": 3, "titan": 2,
+                "silhouette in distance": 2, "vast landscape": 1, "dwarf": 1,
+            },
+            "required_words": ["colossal", "massive", "giant", "scale", "monolith", "tiny"],
+            "banned_words": [
+                "portrait", "close-up", "selfie", "headshot", "macro",
+                "intimate", "crowd", "bust shot", "looking at viewer", "buzz",
+            ],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 3,
+        },
+        "Micro-World": {
+            "keywords": {
+                "miniature": 3, "macro photography": 2, "diorama": 3, "tilt-shift": 2,
+                "tiny world": 2, "inside a": 2, "microscopic": 1, "scale": 1,
+                "living inside": 2, "pocket-sized": 2, "tabletop": 1, "small scale": 1,
+            },
+            "required_words": ["miniature", "macro", "diorama", "tiny", "inside", "small"],
+            "banned_words": [
+                "giant", "colossal", "massive", "landscape", "mountain",
+                "skyline", "outer space", "buzz",
+            ],
+            "min_length": 60,
+            "max_commas": 25,
+            "min_score": 3,
+        },
+        "Retro-Futuristic": {
+            "keywords": {
+                "retro-futuristic": 3, "atompunk": 3, "raypunk": 3, "cassette-futurism": 2,
+                "mid-century modern": 2, "googie": 3, "vacuum tubes": 2, "analog tech": 1,
+                "vintage space": 1, "rocketship": 1, "bubble-top": 2, "bakelite": 2,
+                "chrome fins": 2, "1950s": 1, "1960s": 1, "fallout-style": 1,
+            },
+            "required_words": [
+                "retro", "atompunk", "raypunk", "vintage", "analog", "mid-century", "googie",
+            ],
+            "banned_words": [
+                "cybernetic", "hologram", "modern", "smartphone", "contemporary",
+                "digital", "flat design", "buzz", "sleek white", "high-tech",
+            ],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 3,
+        },
+        "Underwater": {
+            "keywords": {
+                "underwater": 3, "ocean": 2, "coral": 2, "reef": 2, "deep sea": 3,
+                "bioluminescent": 3, "submarine": 2, "aquatic": 2, "seabed": 2,
+                "kelp": 1, "bubbles": 1, "diving": 1, "fish": 1, "whale": 2,
+                "abyss": 2, "trench": 2, "jellyfish": 2, "shipwreck": 2,
+            },
+            "required_words": [
+                "underwater", "ocean", "sea", "aquatic", "coral", "deep",
+            ],
+            "banned_words": [
+                "desert", "mountain", "sky", "flying", "space", "forest", "buzz",
+            ],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 2,
+        },
+        "Steampunk": {
+            "keywords": {
+                "steampunk": 3, "clockwork": 2, "brass": 2, "gears": 2, "steam": 2,
+                "victorian": 2, "airship": 2, "goggles": 1, "mechanical": 1,
+                "pipes": 1, "copper": 1, "cog": 1, "dirigible": 2, "boiler": 1,
+                "pneumatic": 2, "rivets": 1,
+            },
+            "required_words": [
+                "steampunk", "clockwork", "brass", "gears", "steam", "victorian",
+            ],
+            "banned_words": [
+                "cyberpunk", "neon", "hologram", "digital", "modern",
+                "smartphone", "laser", "buzz",
+            ],
+            "min_length": 50,
+            "max_commas": 20,
+            "min_score": 2,
+        },
+        "Post-Apocalyptic": {
+            "keywords": {
+                "post-apocalyptic": 3, "wasteland": 2, "ruins": 2, "desolate": 2,
+                "survivor": 2, "overgrown": 2, "abandoned": 2, "bunker": 2,
+                "rubble": 1, "decay": 1, "scavenger": 2, "fallout": 2,
+                "barren": 1, "dust": 1, "collapsed": 1, "rusty": 1,
+            },
+            "required_words": [
+                "post-apocalyptic", "wasteland", "ruins", "abandoned", "desolate", "survivor",
+            ],
+            "banned_words": [
+                "pristine", "luxury", "modern", "clean", "polished",
+                "utopian", "cheerful", "buzz",
             ],
             "min_length": 50,
             "max_commas": 20,
@@ -424,17 +558,20 @@ class CivitaiScraper:
                 print(f"Base models in results: {actual_base_models}")
         return all_images
 
-    def save_results(self, data: List[Dict], filename: str = None):
+    def save_results(self, data: List[Dict], filename: str = None,
+                     filename_prefix: str = None):
         """
         Save scraped data to JSON file.
 
         Args:
             data: List of scraped image data
             filename: Output filename (auto-generated if None)
+            filename_prefix: Optional prefix prepended to auto-generated name
         """
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"civitai_prompts_{timestamp}.json"
+            prefix = f"{self.sanitize_filename_prefix(filename_prefix)}_" if filename_prefix else ""
+            filename = f"{prefix}civitai_prompts_{timestamp}.json"
 
         filepath = os.path.join(self.output_dir, filename)
 
@@ -445,7 +582,8 @@ class CivitaiScraper:
 
     def export_prompts_only(self, data: List[Dict], filename: str = None,
                            double_spaced: bool = False, use_separator: bool = False,
-                           positive_only: bool = False, one_per_line: bool = False):
+                           positive_only: bool = False, one_per_line: bool = False,
+                           filename_prefix: str = None):
         """
         Export only prompts to a text file.
 
@@ -457,10 +595,12 @@ class CivitaiScraper:
             positive_only: If True, skip negative prompts in output
             one_per_line: If True, clean and collapse each prompt to a single line
                           with no separators (overrides double_spaced and use_separator)
+            filename_prefix: Optional prefix prepended to auto-generated name
         """
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"prompts_only_{timestamp}.txt"
+            prefix = f"{self.sanitize_filename_prefix(filename_prefix)}_" if filename_prefix else ""
+            filename = f"{prefix}prompts_only_{timestamp}.txt"
 
         filepath = os.path.join(self.output_dir, filename)
 
@@ -497,6 +637,20 @@ class CivitaiScraper:
                             f.write("\n")
 
         print(f"Prompts exported to {filepath}")
+
+    @staticmethod
+    def sanitize_filename_prefix(name: str, max_len: int = 30) -> str:
+        """Sanitize a preset/label name for use as a filename prefix.
+
+        Replaces illegal filename characters, collapses whitespace to
+        underscores, and truncates to *max_len* characters.
+        """
+        sanitized = re.sub(r'[<>:"/\\|?*]', '', name)
+        sanitized = re.sub(r'[\s/]+', '_', sanitized)
+        sanitized = sanitized.strip('_.')
+        if len(sanitized) > max_len:
+            sanitized = sanitized[:max_len].rstrip('_')
+        return sanitized
 
     @staticmethod
     def clean_prompt(raw: str) -> str:
@@ -680,17 +834,20 @@ class CivitaiScraper:
         results.sort(key=lambda x: x[1], reverse=True)
         return results
 
-    def save_mined_json(self, prompts: List[Tuple[str, int]], filename: str = None):
+    def save_mined_json(self, prompts: List[Tuple[str, int]], filename: str = None,
+                        filename_prefix: str = None):
         """
         Save mined prompts to a JSON file.
 
         Args:
             prompts: List of (prompt, score) tuples
             filename: Output filename (auto-generated if None)
+            filename_prefix: Optional prefix prepended to auto-generated name
         """
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"mined_prompts_{timestamp}.json"
+            prefix = f"{self.sanitize_filename_prefix(filename_prefix)}_" if filename_prefix else ""
+            filename = f"{prefix}mined_prompts_{timestamp}.json"
 
         filepath = os.path.join(self.output_dir, filename)
         data = [{"prompt": prompt, "score": score} for prompt, score in prompts]
@@ -703,7 +860,8 @@ class CivitaiScraper:
     def export_mined_prompts(self, prompts: List[Tuple[str, int]],
                              filename: str = None,
                              use_separator: bool = True,
-                             one_per_line: bool = False):
+                             one_per_line: bool = False,
+                             filename_prefix: str = None):
         """
         Export mined prompts to a text file.
 
@@ -713,10 +871,12 @@ class CivitaiScraper:
             use_separator: Use visual separator lines between prompts
             one_per_line: If True, write one prompt per line with no spacing
                           (overrides use_separator)
+            filename_prefix: Optional prefix prepended to auto-generated name
         """
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"mined_prompts_{timestamp}.txt"
+            prefix = f"{self.sanitize_filename_prefix(filename_prefix)}_" if filename_prefix else ""
+            filename = f"{prefix}mined_prompts_{timestamp}.txt"
 
         filepath = os.path.join(self.output_dir, filename)
         separator = "\u2500" * 50  # Unicode box-drawing character
