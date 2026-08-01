@@ -87,10 +87,10 @@ python civitai_scraper.py --mine --mine-keywords "dragon:3,castle:2,magic" --min
 **Scraping:**
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--base-model` | *all* | Base model filter (e.g. `Flux.1 D`, `SDXL 1.0`, `Pony`) |
+| `--base-model` | *all* | Base model filter (e.g. `Flux.1 D`, `SDXL 1.0`, `Pony`, `Krea 2`). Run `--list-base-models` to see all current values. |
 | `--model-type` | *all* | Checkpoint, LORA, LoCon, TextualInversion, etc. |
 | `--max-images` | 100 | Max images to scrape |
-| `--sort` | Most Reactions | Most Reactions, Most Comments, Newest |
+| `--sort` | Most Reactions | Most Reactions, Most Comments, Most Collected, Newest, Oldest, Random |
 | `--period` | AllTime | AllTime, Year, Month, Week, Day |
 | `--nsfw` | *any* | None, Soft, Mature, X |
 | `--username` | - | Filter by Civitai username |
@@ -101,6 +101,8 @@ python civitai_scraper.py --mine --mine-keywords "dragon:3,castle:2,magic" --min
 | `--use-separator` | off | Separator lines between prompts |
 | `--no-strict-filter` | off | Allow mixed base model results |
 | `--api-key` | - | Civitai API key for authenticated access |
+| `--list-base-models` | - | Print the current valid `--base-model` values from the live Civitai API, then exit |
+| `--list-model-types` | - | Print the current valid `--model-type` values from the live Civitai API, then exit |
 
 **Mining:**
 | Argument | Default | Description |
@@ -129,6 +131,7 @@ python civitai_scraper.py --mine --mine-keywords "dragon:3,castle:2,magic" --min
 - Not all images have prompts; the scraper reports counts
 - Rate limiting is configurable via the delay setting
 - Custom presets are saved to `custom_presets.json` (automatically git-ignored)
+- The GUI's Base Model / Type dropdowns refresh themselves from Civitai's live `/api/v1/enums` endpoint on startup, so newly added base models (e.g. new checkpoints/video models) show up automatically without an app update. If the request fails (offline, API change) it silently falls back to the bundled list. CLI users can check `--list-base-models` / `--list-model-types` for the same live data.
 
 ## License
 

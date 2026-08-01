@@ -296,6 +296,32 @@ class CivitaiScraper:
         # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
 
+    @staticmethod
+    def fetch_enums(timeout: float = 10) -> Optional[Dict]:
+        """
+        Fetch the live enum values (base models, model types, etc.) Civitai
+        currently accepts, straight from their API.
+
+        This lets callers (e.g. the GUI's dropdown lists) stay current
+        without hardcoding a base model / model type list that goes stale
+        every time Civitai adds support for a new model family.
+
+        Returns:
+            Parsed JSON dict (keys include "BaseModel", "ActiveBaseModel",
+            "ModelType", "ModelFileType", "BaseModelType"), or None if the
+            request fails for any reason (offline, timeout, API change).
+        """
+        try:
+            response = requests.get(
+                f"{CivitaiScraper.BASE_URL}/enums",
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            return response.json()
+        except (requests.RequestException, ValueError):
+            return None
+
     def get_models(self,
                    model_type: Optional[str] = None,
                    base_model: Optional[str] = None,
@@ -1045,8 +1071,35 @@ def main():
         default=50,
         help="Number of matching prompts to find (default: 50)"
     )
+    parser.add_argument(
+        "--list-base-models",
+        action="store_true",
+        help="Print the current list of valid --base-model values from the "
+             "live Civitai API, then exit"
+    )
+    parser.add_argument(
+        "--list-model-types",
+        action="store_true",
+        help="Print the current list of valid --model-type values from the "
+             "live Civitai API, then exit"
+    )
 
     args = parser.parse_args()
+
+    if args.list_base_models or args.list_model_types:
+        enums = CivitaiScraper.fetch_enums()
+        if not enums:
+            print("Error: Could not reach the Civitai API to list enum values.")
+            return
+        if args.list_base_models:
+            print("Valid --base-model values:")
+            for name in enums.get("BaseModel", []):
+                print(f"  {name}")
+        if args.list_model_types:
+            print("Valid --model-type values:")
+            for name in enums.get("ModelType", []):
+                print(f"  {name}")
+        return
 
     # Initialize scraper
     scraper = CivitaiScraper(output_dir=args.output_dir, delay=args.delay, api_key=args.api_key)

@@ -97,36 +97,52 @@ def save_custom_presets_to_disk(presets):
 class CivitaiScraperGUI:
     """GUI for Civitai scraper with tabbed interface."""
 
+    # Fallback lists, used until (or unless) the live lists are fetched
+    # from Civitai's /api/v1/enums endpoint at startup (see
+    # _start_live_enum_fetch). Civitai adds new base models / model types
+    # often enough that a hardcoded list goes stale within months, so these
+    # are just a reasonable offline/error default snapshotted 2026-07-31 -
+    # they are not meant to be hand-maintained going forward.
     BASE_MODELS = [
         "Any",
-        # Popular / current
-        "Flux.1 D", "Flux.1 S", "Flux.1 Krea", "Flux.1 Kontext",
-        "Flux.2 D", "Flux.2 Klein 9B", "Flux.2 Klein 9B-base",
-        "Flux.2 Klein 4B", "Flux.2 Klein 4B-base",
-        "Illustrious", "NoobAI", "Pony", "Pony V7",
-        "SDXL 1.0", "SD 1.5", "Chroma",
-        # Other models
-        "Anima", "AuraFlow", "CogVideoX", "HiDream",
-        "Hunyuan 1", "Hunyuan Video", "Kling", "Kolors",
-        "LTXV", "LTXV2", "Lumina", "Mochi", "Nano Banana",
-        "OpenAI", "Other", "PixArt a", "PixArt E", "Qwen",
-        "SD 1.4", "SD 2.0", "SD 2.1", "SD 3",
-        "SD 1.5 LCM", "SD 1.5 Hyper",
-        "SDXL Turbo", "SDXL Lightning", "SDXL Hyper",
-        "Veo 3", "ZImageTurbo", "Z Image Base",
-        # Video models
-        "Wan Video 1.3B t2v", "Wan Video 14B t2v",
-        "Wan Video 14B i2v 480p", "Wan Video 14B i2v 720p",
-        "Wan Video 2.2 TI2V-5B", "Wan Video 2.2 I2V-A14B",
-        "Wan Video 2.2 T2V-A14B", "Wan Video 2.5 T2V", "Wan Video 2.5 I2V",
+        "ACE Audio", "Anima", "AuraFlow", "Boogu",
+        "Chroma", "CogVideoX", "Ernie", "Flux.1 D",
+        "Flux.1 Kontext", "Flux.1 Krea", "Flux.1 S", "Flux.2 D",
+        "Flux.2 Klein 4B", "Flux.2 Klein 4B-base", "Flux.2 Klein 9B", "Flux.2 Klein 9B-base",
+        "Grok", "HappyHorse", "HiDream", "HiDream-O1",
+        "Hunyuan 1", "Hunyuan Video", "Hunyuan3D", "Ideogram 4.0",
+        "Illustrious", "Imagen4", "Kling", "Kolors",
+        "Krea 2", "Lens", "LTXV", "LTXV 2.3",
+        "LTXV2", "Lumina", "MageFlow", "MAI",
+        "MiniMax", "Mochi", "Nano Banana", "NoobAI",
+        "ODOR", "OpenAI", "Other", "PixArt a",
+        "PixArt E", "Playground v2", "PolyGen", "Pony",
+        "Pony V7", "Qwen", "Qwen 2", "Reve",
+        "SD 1.4", "SD 1.5", "SD 1.5 Hyper", "SD 1.5 LCM",
+        "SD 2.0", "SD 2.0 768", "SD 2.1", "SD 2.1 768",
+        "SD 2.1 Unclip", "SD 3", "SD 3.5", "SD 3.5 Large",
+        "SD 3.5 Large Turbo", "SD 3.5 Medium", "SDXL 0.9", "SDXL 1.0",
+        "SDXL 1.0 LCM", "SDXL Distilled", "SDXL Hyper", "SDXL Lightning",
+        "SDXL Turbo", "Seedance", "Seedream", "Sora 2",
+        "Stable Cascade", "SVD", "SVD XT", "Tripo",
+        "Upscaler", "Veo 3", "Vidu Q1", "Wan Image 2.7",
+        "Wan Video", "Wan Video 1.3B t2v", "Wan Video 14B i2v 480p", "Wan Video 14B i2v 720p",
+        "Wan Video 14B t2v", "Wan Video 2.2 I2V-A14B", "Wan Video 2.2 T2V-A14B", "Wan Video 2.2 TI2V-5B",
+        "Wan Video 2.5 I2V", "Wan Video 2.5 T2V", "Wan Video 2.7", "ZImageBase",
+        "ZImageTurbo",
     ]
 
     MODEL_TYPES = [
-        "Any", "Checkpoint", "LORA", "LoCon", "TextualInversion",
-        "Hypernetwork", "AestheticGradient", "Controlnet", "Poses",
+        "Any",
+        "AestheticGradient", "Checkpoint", "CLIP", "CLIPVision",
+        "Controlnet", "Detection", "DoRA", "Hypernetwork",
+        "LLM", "LoCon", "LORA", "MotionModule",
+        "Other", "Poses", "TextEncoder", "TextualInversion",
+        "UNet", "Upscaler", "VAE", "VisionLanguage",
+        "Wildcards", "Workflows",
     ]
 
-    SORT_OPTIONS = ["Most Reactions", "Most Comments", "Newest"]
+    SORT_OPTIONS = ["Most Reactions", "Most Comments", "Most Collected", "Newest", "Oldest", "Random"]
     PERIOD_OPTIONS = ["AllTime", "Year", "Month", "Week", "Day"]
     NSFW_OPTIONS = ["Any", "None", "Soft", "Mature", "X"]
 
@@ -147,6 +163,7 @@ class CivitaiScraperGUI:
         self.custom_presets = load_custom_presets()
 
         self.create_widgets()
+        self._start_live_enum_fetch()
 
     def create_widgets(self):
         """Create all GUI widgets."""
@@ -312,17 +329,19 @@ class CivitaiScraperGUI:
         tip(lbl, "Filter by the base model architecture.\n"
                  "'Any' returns images from all models.")
         self.base_model_var = tk.StringVar(value="Any")
-        ttk.Combobox(
+        self.base_model_combo = ttk.Combobox(
             parent, textvariable=self.base_model_var,
             values=self.BASE_MODELS, state="readonly"
-        ).grid(row=r, column=1, sticky="ew", pady=2, padx=(4, 12))
+        )
+        self.base_model_combo.grid(row=r, column=1, sticky="ew", pady=2, padx=(4, 12))
         ttk.Label(parent, text="Type:").grid(row=r, column=2, sticky="w", pady=2)
         self.model_type_var = tk.StringVar(value="Any")
-        tip(
+        self.model_type_combo = tip(
             ttk.Combobox(parent, textvariable=self.model_type_var,
                          values=self.MODEL_TYPES, state="readonly"),
             "Filter by model type (Checkpoint, LoRA, etc.)"
-        ).grid(row=r, column=3, sticky="ew", pady=2, padx=4)
+        )
+        self.model_type_combo.grid(row=r, column=3, sticky="ew", pady=2, padx=4)
 
         # Row: Max Images + Sort
         r += 1
@@ -529,10 +548,11 @@ class CivitaiScraperGUI:
 
         ttk.Label(s_frame, text="Model:").pack(side=tk.LEFT)
         self.mine_base_model_var = tk.StringVar(value="Any")
-        ttk.Combobox(
+        self.mine_base_model_combo = ttk.Combobox(
             s_frame, textvariable=self.mine_base_model_var,
             values=self.BASE_MODELS, state="readonly", width=13
-        ).pack(side=tk.LEFT, padx=(2, 10))
+        )
+        self.mine_base_model_combo.pack(side=tk.LEFT, padx=(2, 10))
 
         lbl_d = ttk.Label(s_frame, text="Delay:")
         lbl_d.pack(side=tk.LEFT)
@@ -679,6 +699,38 @@ class CivitaiScraperGUI:
         self.mine_min_length_var.set(preset["min_length"])
         self.mine_max_commas_var.set(preset["max_commas"])
         self.mine_min_score_var.set(preset["min_score"])
+
+    # ── Live base model / model type list ───────────────────────────────
+
+    def _start_live_enum_fetch(self):
+        """Refresh the Base Model / Type dropdowns from Civitai's live enum
+        list in the background, so newly added models show up without a
+        code update. Silently keeps the static fallback list if this fails
+        (offline, API change, etc.) - never blocks the GUI or shows an
+        error for what is a best-effort convenience refresh."""
+        threading.Thread(target=self._fetch_live_enums, daemon=True).start()
+
+    def _fetch_live_enums(self):
+        """Runs on a background thread - network I/O only, no widget access
+        (Tkinter widgets must only be touched from the main thread)."""
+        enums = CivitaiScraper.fetch_enums()
+        if enums:
+            self.root.after(0, self._apply_live_enums, enums)
+
+    def _apply_live_enums(self, enums):
+        """Runs on the main thread via root.after - safe to update widgets."""
+        base_models = enums.get("BaseModel")
+        if base_models:
+            values = ["Any"] + sorted(base_models, key=str.lower)
+            self.base_model_combo["values"] = values
+            self.mine_base_model_combo["values"] = values
+
+        model_types = enums.get("ModelType")
+        if model_types:
+            self.model_type_combo["values"] = ["Any"] + sorted(model_types, key=str.lower)
+
+        if base_models or model_types:
+            self.log("Refreshed base model / model type list from the live Civitai API.")
 
     # ── Logging ───────────────────────────────────────────────────────
 
