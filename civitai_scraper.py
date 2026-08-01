@@ -398,7 +398,10 @@ class CivitaiScraper:
         url = f"{self.BASE_URL}/images"
         params = {
             "limit": min(limit, 200),
-            "sort": sort
+            "sort": sort,
+            # Civitai now omits the meta object (prompt, seed, sampler, etc.)
+            # unless withMeta=true is explicitly requested.
+            "withMeta": "true",
         }
 
         # Use cursor-based pagination if available, else page-based
