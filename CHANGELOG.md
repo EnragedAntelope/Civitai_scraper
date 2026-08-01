@@ -1,5 +1,21 @@
 # Changelog
 
+## Version 2.2 - Fixed missing prompts/meta (2026-07-31)
+
+### Critical Fix
+
+**Fixed scraper returning no prompts or generation metadata:**
+- Civitai's `/api/v1/images` endpoint now omits the `meta` object (prompt,
+  negative prompt, seed, steps, sampler, resources, etc.) unless the request
+  explicitly includes `withMeta=true`. Previously the API included `meta` by
+  default, so this scraper never needed to set it.
+- Added `withMeta=true` to every `/images` request in
+  `get_images_by_filter()`. This is the single method backing both normal
+  scraping and prompt mining, so the fix applies to both modes and to the GUI.
+- Confirmed against the live API: before the fix, `meta` was `null` for
+  every image (even top "Most Reactions" results with known prompts); after
+  the fix, `meta` is populated as documented.
+
 ## Version 2.1 - Fixed ZImageTurbo (2025-12-28)
 
 ### Critical Fix
