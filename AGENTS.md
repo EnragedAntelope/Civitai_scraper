@@ -2,6 +2,16 @@
 
 Scrape image prompts and metadata from Civitai. Filter by base model, sort order, time period, and more. Includes a Prompt Miner that finds high-quality prompts for specific subjects using weighted keyword scoring. Cross-platform GUI and CLI. Python 3.7+, requests-only dependency.
 
+## Current state
+
+_Last verified: 2026-08-08_
+
+- **Status:** in development. This is a fork — `upstream` points at the original project, `origin` at ours. The v2.3 work lives on branch `feature/live-base-model-list` and is **ahead of `main`, not yet merged**. Push to the branch you are actually on.
+- **Works:** image scraping with base-model / model-type / sort / period / NSFW / username filters; the Prompt Miner with built-in and custom presets, weighted keyword scoring and quality filters; GUI and CLI at parity; JSON metadata plus cleaned text output with preset-prefixed filenames.
+- **In progress:** live enum fetching (`CivitaiScraper.fetch_enums()` against Civitai's `/api/v1/enums`) so the base-model and model-type lists stop going stale, plus the `withMeta=true` fix that made the scraper return prompts again. Both are on the feature branch, merged together so the branch is self-contained for testing.
+- **Known gaps / next steps:** merge `feature/live-base-model-list` into `main` after testing against the live API; there is no test suite and no CI workflow, so every change is verified by hand; no packaging or version metadata — `CHANGELOG.md` is the only version record; the bundled fallback enum list is a snapshot and will drift.
+- **Deep docs:** `CHANGELOG.md` (version history), `QUICKSTART.md`, `PROJECT_FILES.md`. No `docs/` directory.
+
 ## Architecture in 60 seconds
 
 - **Two main features:** Image Scraper (bulk-scrape images & prompts with filters) and Prompt Miner (find best prompts for a subject with smart scoring).
